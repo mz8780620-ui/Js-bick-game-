@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Weather Bike Racer - Coin Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <!-- WebToNative AdMob Script -->
+    <script src="https://cdn.jsdelivr.net/npm/webtonative@1.1.0/dist/webtonative.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Poppins', sans-serif; user-select: none; }
+        body { background-color: #0f172a; color: white; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+        
+        /* Orientation Warning */
+        #rotate-warning { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; z-index: 9999; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; cursor: pointer; }
+        #rotate-warning h2 { color: #00e5ff; margin-bottom: 15px; font-size: 24px; }
+        @media (orientation: portrait) { #rotate-warning { display: flex; } }
+
+        #app-container { width: 100vw; height: 100vh; position: relative; background: #000; overflow: hidden; }
+        
+        .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 10; text-align: center; }
+        .screen.active { display: flex; animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Loading Screen */
+        #loading-screen { background: #0f172a; z-index: 50; }
+        .loader { width: 50px; height: 50px; border: 4px solid rgba(0, 229, 255, 0.2); border-top-color: #00e5ff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .load-text { color: #00e5ff; font-size: 16px; font-weight: bold; letter-spacing: 2px; margin-bottom: 20px; }
+        .loading-name { font-size: 40px; font-weight: 800; letter-spacing: 4px; color: #f472b6; text-shadow: 0 0 20px rgba(244, 114, 182, 0.6); animation: pulse 1.5s infinite alternate; margin-bottom: 10px; }
+        @keyframes pulse { from { transform: scale(1); opacity: 0.8; } to { transform: scale(1.1); opacity: 1; } }
+        .loading-credit { font-size: 12px; color: #94a3b8; letter-spacing: 1px; text-transform: uppercase; margin-top: 30px; }
+
+        /* Garage Screen */
+        #garage-screen { background: linear-gradient(135deg, #1e293b, #0f172a); padding: 20px; }
+        .garage-header { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; margin-bottom: 20px; position: absolute; top: 20px; }
+        .coin-display { background: rgba(255, 215, 0, 0.1); border: 2px solid #ffd700; padding: 8px 20px; border-radius: 20px; font-size: 20px; font-weight: bold; color: #ffd700; display: flex; align-items: center; gap: 10px; }
+        
+        .cars-grid { display: flex; gap: 20px; overflow-x: auto; width: 90%; padding: 20px; scrollbar-width: none; }
+        .cars-grid::-webkit-scrollbar { display: none; }
+        
+        .car-card { min-width: 220px; background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 15px; padding: 20px; display: flex; flex-direction: column; align-items: center; transition: 0.3s; }
+        .car-card.selected { border-color: #00e5ff; box-shadow: 0 0 20px rgba(0, 229, 255, 0.4); background: rgba(0, 229, 255, 0.1); }
+        .car-emoji { font-size: 70px; margin-bottom: 15px; }
+        .car-name { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+        .car-price { font-size: 16px; color: #ffd700; margin-bottom: 15px; font-weight: bold; }
+        
+        .btn { background: linear-gradient(135deg, #00e5ff, #007bb5); color: #000; border: none; padding: 10px 20px; font-size: 14px; font-weight: bold; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,229,255,0.4); transition: 0.2s; width: 100%; }
+        .btn:active { transform: scale(0.95); }
+        .btn-buy { background: linear-gradient(135deg, #ffd700, #d4af37); color: #000; }
+        .btn-watch-ad { background: linear-gradient(135deg, #10b981, #047857); color: white; margin-top: 15px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); animation: pulse-btn 2s infinite; }
+        @keyframes pulse-btn { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+
+        /* Mode Select Screen */
+        #mode-screen { background: #0f172a; flex-direction: row; gap: 20px; }
+        .mode-btn { width: 180px; height: 120px; border-radius: 15px; border: 2px solid; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s; background: rgba(255,255,255,0.05); }
+        .mode-btn:active { transform: scale(0.95); }
+        .mode-normal { border-color: #10b981; color: #10b981; }
+        .mode-hard { border-color: #f59e0b; color: #f59e0b; }
+        .mode-live { border-color: #ef4444; color: #ef4444; }
+        .mode-icon { font-size: 40px; margin-bottom: 10px; }
+
+        /* Game Screen & Canvas */
+        #game-screen { background: #111; padding: 0; display: block; }
+        canvas { display: block; width: 100%; height: 100%; background: #222; }
+        
+        #hud { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; pointer-events: none; z-index: 15; }
+        .hud-left { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
+        .menu-btn { background: rgba(0,0,0,0.6); border: 1px solid rgba(0,229,255,0.5); color: #00e5ff; font-size: 24px; padding: 5px 12px; border-radius: 10px; cursor: pointer; font-weight: bold; }
+        .hud-item { background: rgba(0,0,0,0.6); padding: 6px 12px; border-radius: 15px; font-weight: bold; color: #00e5ff; border: 1px solid rgba(0,229,255,0.3); font-size: 14px; }
+        #weather-display { color: #fff; border-color: #fff; }
+
+        /* In-Game Menu */
+        #game-menu { position: fixed; top: 0; left: 0; width: 280px; height: 100%; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); border-right: 2px solid #00e5ff; z-index: 1000; transform: translateX(-100%); transition: transform 0.3s ease; display: flex; flex-direction: column; padding: 20px; text-align: left; }
+        #game-menu.open { transform: translateX(0); }
+        #game-menu h2 { color: #00e5ff; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; }
+        .menu-credit { margin-bottom: 15px; }
+        .menu-credit span { font-size: 12px; color: #94a3b8; text-transform: uppercase; }
+        .menu-credit .name { font-size: 20px; font-weight: 700; color: #f8fafc; display: block; }
+        .menu-credit .highlight { color: #00e5ff; }
+        .menu-credit .sumaiya { color: #f472b6; }
+        .close-menu-btn { margin-top: auto; background: #ef4444; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        #menu-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; display: none; opacity: 0; }
+        #menu-overlay.active { display: block; opacity: 1; }
+
+        /* Ad Modal (Simulation for Browser) */
+        #ad-modal { background: rgba(0,0,0,0.95); z-index: 2000; }
+        .ad-box { border: 2px dashed #555; padding: 30px 40px; border-radius: 15px; background: #1e1e1e; text-align: center; }
+        .ad-box h2 { color: #f59e0b; margin-bottom: 10px; }
+        .ad-box p { color: #888; margin-bottom: 15px; font-size: 14px; }
+        #ad-timer { font-size: 40px; font-weight: bold; color: #00e5ff; }
+        .close-ad { display: none; background: #10b981; margin-top: 15px; }
+
+        /* Game Over Screen */
+        #gameover-screen { background: rgba(15, 23, 42, 0.95); z-index: 20; backdrop-filter: blur(5px); }
+        .gameover-title { font-size: 32px; color: #ef4444; margin-bottom: 10px; font-weight: 900; }
+        .final-score { font-size: 18px; color: white; margin-bottom: 20px; }
+        .final-score span { color: #00e5ff; font-size: 36px; font-weight: bold; display: block; margin-top: 5px; }
+        .earned-coins { font-size: 20px; color: #ffd700; font-weight: bold; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <div id="rotate-warning" onclick="forceLandscape()">
+        <h2>Please Rotate Your Phone 📱🔄</h2>
+        <p>This game is best played in Landscape mode.</p>
+        <p style="margin-top: 20px; font-size: 14px; color: #00e5ff; font-weight: bold;">Tap Here to Play Fullscreen</p>
+    </div>
+
+    <audio id="bg-music" loop>
+        <source src="https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c6ff1bab.mp3?filename=action-trailer-racing-11971.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="crash-sound">
+        <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3?filename=car-crash-11622.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="app-container">
+
+        <div id="game-menu">
+            <h2>About Game</h2>
+            <div class="menu-credit"><span>Created By</span><div class="name highlight">JS ZAKIR</div></div>
+            <div class="menu-credit"><span>Special Thanks To</span><div class="name sumaiya">SUMAIYA</div></div>
+            <div style="font-size:12px; color:#94a3b8; margin-top:20px;">Built with DeepSeek AI</div>
+            <button class="close-menu-btn" onclick="toggleGameMenu()">Close Menu</button>
+        </div>
+        <div id="menu-overlay" onclick="toggleGameMenu()"></div>
+
+        <!-- LOADING SCREEN -->
+        <div id="loading-screen" class="screen active">
+            <div class="loader"></div>
+            <div class="load-text">LOADING WEATHER RACER...</div>
+            <div class="loading-name">Su******</div>
+            <div class="loading-credit">Created by JS ZAKIR</div>
+        </div>
+
+        <!-- GARAGE SCREEN -->
+        <div id="garage-screen" class="screen">
+            <div class="garage-header">
+                <h2 style="color:#00e5ff; font-size: 24px;">GARAGE</h2>
+                <div class="coin-display">🪙 <span id="coin-count">0</span></div>
+            </div>
+            <div class="cars-grid" id="cars-grid"></div>
+            <div style="position: absolute; bottom: 20px; display: flex; gap: 20px; width: 80%;">
+                <button class="btn btn-watch-ad" onclick="watchAdForCoins()">📺 Watch Ad to get +100 Coins</button>
+                <button class="btn" onclick="showScreen('mode-screen')">RACE NOW ➔</button>
+            </div>
+        </div>
+
+        <!-- MODE SELECT SCREEN -->
+        <div id="mode-screen" class="screen">
+            <div class="mode-btn mode-normal" onclick="selectMode('normal')"><span class="mode-icon">🟢</span><span>Normal</span></div>
+            <div class="mode-btn mode-hard" onclick="selectMode('hard')"><span class="mode-icon">🔴</span><span>Hard</span></div>
+            <div class="mode-btn mode-live" onclick="selectMode('live')"><span class="mode-icon">🟣</span><span>Online</span></div>
+            <button class="btn" style="position:absolute; bottom: 20px; width: 200px; background:#334155; color:white;" onclick="showScreen('garage-screen')">Back to Garage</button>
+        </div>
+
+        <!-- GAME SCREEN -->
+        <div id="game-screen" class="screen">
+            <div id="hud">
+                <div class="hud-left">
+                    <div class="menu-btn" onclick="toggleGameMenu()">☰</div>
+                    <div class="hud-item" id="score-display">Score: 0</div>
+                </div>
+                <div class="hud-item" id="weather-display">☀️ Sunny</div>
+                <div class="hud-item" id="speed-display">Speed: 0 km/h</div>
+            </div>
+            <canvas id="gameCanvas"></canvas>
+        </div>
+
+        <!-- AD SIMULATION MODAL -->
+        <div id="ad-modal" class="screen">
+            <div class="ad-box">
+                <h2>Advertisement</h2>
+                <p>Please watch this ad to earn coins.</p>
+                <div id="ad-timer">5</div>
+                <button class="btn close-ad" id="ad-close-btn" onclick="finishAd()">Claim Reward</button>
+            </div>
+        </div>
+
+        <!-- GAME OVER SCREEN -->
+        <div id="gameover-screen" class="screen">
+            <h1 class="gameover-title">CRASHED!</h1>
+            <div class="final-score">Your Score <span id="final-score-value">0</span></div>
+            <div class="earned-coins" id="earned-coins-display">+0 🪙</div>
+            <button class="btn" onclick="playAgain()">PLAY AGAIN</button>
+            <button class="btn" style="background:#334155; color:white; margin-top:10px;" onclick="goToGarage()">GARAGE</button>
+        </div>
+
+    </div>
