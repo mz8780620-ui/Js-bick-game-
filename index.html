@@ -187,3 +187,342 @@
         </div>
 
     </div>
+    <script>
+        // ==========================================
+        // AdMob Setup for WebToNative (W2N)
+        // ==========================================
+        const ADMOB_REWARDED_ID = "ca-app-pub-6648413942656767/2699182382"; 
+
+        // --- FULLSCREEN LOGIC ---
+        function forceLandscape() {
+            let elem = document.documentElement;
+            if (elem.requestFullscreen) { elem.requestFullscreen(); } 
+            else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); }
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(e => console.log(e));
+            }
+            document.getElementById('rotate-warning').style.display = 'none';
+        }
+
+        // --- SAFE LOCAL STORAGE ---
+        let coins = 0;
+        let selectedCarEmoji = '🏍️';
+        let unlockedCars = ['🏍️'];
+
+        try {
+            if(localStorage.getItem('bikeCoins')) coins = parseInt(localStorage.getItem('bikeCoins'));
+            if(localStorage.getItem('selectedCar')) selectedCarEmoji = localStorage.getItem('selectedCar');
+            if(localStorage.getItem('unlockedCars')) unlockedCars = JSON.parse(localStorage.getItem('unlockedCars'));
+        } catch(e) { console.log("LocalStorage blocked."); }
+
+        const carDatabase = [
+            { emoji: '🏍️', name: 'City Bike', price: 0 },
+            { emoji: '🚗', name: 'Family Car', price: 500 },
+            { emoji: '🏎️', name: 'Sports Car', price: 1500 },
+            { emoji: '🚀', name: 'Rocket Racer', price: 5000 }
+        ];
+
+        function updateCoinUI() { document.getElementById('coin-count').innerText = coins; }
+
+        function loadGarage() {
+            updateCoinUI();
+            const grid = document.getElementById('cars-grid');
+            grid.innerHTML = '';
+            carDatabase.forEach(car => {
+                const isUnlocked = unlockedCars.includes(car.emoji);
+                const isSelected = selectedCarEmoji === car.emoji;
+                let card = document.createElement('div');
+                card.className = `car-card ${isSelected ? 'selected' : ''}`;
+                let buttonHTML = isUnlocked ? `<button class="btn" ${isSelected ? 'disabled' : ''} onclick="selectCar('${car.emoji}')">${isSelected ? 'SELECTED' : 'SELECT'}</button>` : `<button class="btn btn-buy" onclick="buyCar('${car.emoji}', ${car.price})">BUY</button>`;
+                card.innerHTML = `<div class="car-emoji">${car.emoji}</div><div class="car-name">${car.name}</div><div class="car-price">${isUnlocked ? 'Unlocked' : '🪙 ' + car.price}</div>${buttonHTML}`;
+                grid.appendChild(card);
+            });
+        }
+
+        function saveData() {
+            try {
+                localStorage.setItem('bikeCoins', coins);
+                localStorage.setItem('unlockedCars', JSON.stringify(unlockedCars));
+                localStorage.setItem('selectedCar', selectedCarEmoji);
+            } catch(e) { console.log("Save failed"); }
+        }
+
+        function buyCar(emoji, price) {
+            if (coins >= price) {
+                coins -= price; unlockedCars.push(emoji); selectedCarEmoji = emoji;
+                saveData(); updateCoinUI(); loadGarage();
+                alert("Car Purchased Successfully!");
+            } else { alert("Not enough coins! Watch more ads to earn."); }
+        }
+
+        function selectCar(emoji) { selectedCarEmoji = emoji; saveData(); loadGarage(); }
+
+        // --- SCREEN & MENU MANAGEMENT ---
+        let isPaused = false;
+        function toggleGameMenu() {
+            let menu = document.getElementById('game-menu');
+            let overlay = document.getElementById('menu-overlay');
+            menu.classList.toggle('open'); overlay.classList.toggle('active');
+            if(document.getElementById('game-screen').classList.contains('active')) { isPaused = menu.classList.contains('open'); }
+        }
+
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            let music = document.getElementById('bg-music');
+            if(screenId === 'game-screen') { music.play().catch(e => console.log("Audio blocked")); } else { music.pause(); }
+            document.getElementById('game-menu').classList.remove('open');
+            document.getElementById('menu-overlay').classList.remove('active');
+            isPaused = false;
+            if(screenId === 'garage-screen') loadGarage();
+        }
+
+        window.addEventListener('load', () => {
+            setTimeout(() => { showScreen('garage-screen'); loadGarage(); }, 2000); 
+        });
+
+        // ==========================================
+        // REAL WEBTONATIVE ADMOB INTEGRATION
+        // ==========================================
+        let adInterval;
+        let adPurpose = '';
+
+        function watchAdForCoins() {
+            adPurpose = 'coins';
+            triggerRealAd();
+        }
+
+        function selectMode(mode) {
+            currentMode = mode;
+            if(mode === 'normal') {
+                startGame();
+            } else {
+                adPurpose = 'mode';
+                triggerRealAd();
+            }
+        }
+
+        function triggerRealAd() {
+            // Check if running inside WebToNative App
+            if (typeof WTN !== 'undefined' && WTN.AdMob) {
+                try {
+                    WTN.AdMob.rewardsAd({
+                        adId: ADMOB_REWARDED_ID,
+                        rewardsAdCallback: function(responseString) {
+                            let response = JSON.parse(responseString);
+                            if (response.status === "rewardSuccess") {
+                                finishAd(); // Ad watched successfully
+                            } else if (response.status === "adDismissed") {
+                                alert("You closed the ad early. No reward.");
+                            }
+                        }
+                    });
+                } catch(e) {
+                    console.log("Ad Error: " + e);
+                    alert("Ad failed to load. Please try again.");
+                }
+            } else {
+                // Fallback Simulation for Testing in Browser (Chrome/Acode)
+                showAdSimulationModal();
+            }
+        }
+
+        function showAdSimulationModal() {
+            document.getElementById('ad-modal').classList.add('active');
+            let timeLeft = 5;
+            let timerDisplay = document.getElementById('ad-timer');
+            let closeBtn = document.getElementById('ad-close-btn');
+            timerDisplay.innerText = timeLeft;
+            closeBtn.style.display = 'none';
+
+            clearInterval(adInterval);
+            adInterval = setInterval(() => {
+                timeLeft--;
+                timerDisplay.innerText = timeLeft;
+                if(timeLeft <= 0) {
+                    clearInterval(adInterval);
+                    timerDisplay.innerText = "✔️";
+                    closeBtn.style.display = 'block';
+                }
+            }, 1000);
+        }
+
+        function finishAd() {
+            document.getElementById('ad-modal').classList.remove('active');
+            if(adPurpose === 'coins') {
+                coins += 100;
+                saveData(); updateCoinUI(); loadGarage();
+                alert("You earned 100 Coins!");
+            } else if(adPurpose === 'mode') {
+                startGame();
+            }
+        }
+
+        function goToGarage() { showScreen('garage-screen'); }
+
+        // --- WEATHER SYSTEM ---
+        const weathers = ['sunny', 'rainy', 'foggy', 'night', 'stormy'];
+        let currentWeather = 'sunny';
+        let weatherTimer = 0;
+        let weatherChangeInterval = 600; 
+        let rainDrops = [];
+
+        function changeWeather() {
+            let oldWeather = currentWeather;
+            while (currentWeather === oldWeather) { currentWeather = weathers[Math.floor(Math.random() * weathers.length)]; }
+            let icon = '☀️';
+            if(currentWeather === 'rainy') icon = '🌧️';
+            if(currentWeather === 'foggy') icon = '🌫️';
+            if(currentWeather === 'night') icon = '🌙';
+            if(currentWeather === 'stormy') icon = '⛈️';
+            document.getElementById('weather-display').innerText = icon + ' ' + currentWeather.charAt(0).toUpperCase() + currentWeather.slice(1);
+
+            rainDrops = [];
+            if(currentWeather === 'rainy' || currentWeather === 'stormy') {
+                let dropCount = currentWeather === 'stormy' ? 100 : 50;
+                for(let i=0; i<dropCount; i++) { rainDrops.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, speed: 10 + Math.random() * 15 }); }
+            }
+        }
+
+        // --- GAME LOGIC ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let gameLoop, score = 0, gameSpeed = 5, speedDisplayValue = 0, isGameOver = false, currentMode = 'normal';
+        let bike = { x: 150, y: 200, width: 60, height: 60 };
+        let obstacles = [], obstacleTimer = 0, touchY = 0, keys = {};
+
+        function resizeCanvas() {
+            let w = document.getElementById('game-screen').clientWidth;
+            let h = document.getElementById('game-screen').clientHeight;
+            canvas.width = (w > 0) ? w : window.innerWidth;
+            canvas.height = (h > 0) ? h : window.innerHeight;
+            bike.x = canvas.width / 4;
+            bike.y = canvas.height / 2 - bike.height / 2;
+            changeWeather(); 
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        canvas.addEventListener('touchstart', handleTouch);
+        canvas.addEventListener('touchmove', handleTouch);
+        function handleTouch(e) {
+            if(isPaused) return;
+            e.preventDefault();
+            let rect = canvas.getBoundingClientRect();
+            let touch = e.touches[0];
+            touchY = touch.clientY - rect.top;
+            bike.y = touchY - (bike.height / 2);
+        }
+
+        window.addEventListener('keydown', e => keys[e.key] = true);
+        window.addEventListener('keyup', e => keys[e.key] = false);
+
+        function startGame() {
+            showScreen('game-screen');
+            setTimeout(resizeCanvas, 100);
+            isGameOver = false; isPaused = false; score = 0; obstacles = []; obstacleTimer = 0; weatherTimer = 0; bike.y = canvas.height / 2 || 200;
+
+            if (currentMode === 'normal') { gameSpeed = 6; speedDisplayValue = 80; }
+            else if (currentMode === 'hard') { gameSpeed = 9; speedDisplayValue = 140; }
+            else if (currentMode === 'live') { gameSpeed = 13; speedDisplayValue = 220; }
+
+            document.getElementById('score-display').innerText = `Score: 0`;
+            document.getElementById('speed-display').innerText = `Speed: ${speedDisplayValue} km/h`;
+            changeWeather(); 
+
+            if(gameLoop) cancelAnimationFrame(gameLoop);
+            gameLoop = requestAnimationFrame(update);
+        }
+
+        function update() {
+            if(isGameOver || isPaused) { gameLoop = requestAnimationFrame(update); return; }
+            if(keys['ArrowUp'] || keys['w']) bike.y -= 8;
+            if(keys['ArrowDown'] || keys['s']) bike.y += 8;
+            if(bike.y < 10) bike.y = 10;
+            if(bike.y > canvas.height - bike.height - 10) bike.y = canvas.height - bike.height - 10;
+
+            score += 1;
+            if(score % 150 === 0) { gameSpeed += 0.5; speedDisplayValue += 5; document.getElementById('speed-display').innerText = `Speed: ${speedDisplayValue} km/h`; }
+            document.getElementById('score-display').innerText = `Score: ${Math.floor(score/10)}`;
+
+            weatherTimer++;
+            if(weatherTimer > weatherChangeInterval) { weatherTimer = 0; changeWeather(); }
+
+            if(currentWeather === 'rainy' || currentWeather === 'stormy') {
+                for(let drop of rainDrops) {
+                    drop.y += drop.speed; drop.x -= gameSpeed * 0.5; 
+                    if(drop.y > canvas.height) { drop.y = -10; drop.x = Math.random() * canvas.width; }
+                    if(drop.x < 0) { drop.x = canvas.width; }
+                }
+            }
+
+            obstacleTimer++;
+            let spawnRate = currentMode === 'normal' ? 90 : (currentMode === 'hard' ? 60 : 40);
+            if(obstacleTimer > spawnRate) {
+                let obsY = Math.random() * (canvas.height - 80) + 10;
+                let type = ['🚗', '🚙', '🚚', '🚓'][Math.floor(Math.random()*4)];
+                obstacles.push({ x: canvas.width, y: obsY, width: 60, height: 60, emoji: type });
+                obstacleTimer = 0;
+            }
+
+            for(let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].x -= gameSpeed; 
+                if(bike.x + 10 < obstacles[i].x + obstacles[i].width - 15 && bike.x + bike.width - 10 > obstacles[i].x + 10 && bike.y + 10 < obstacles[i].y + obstacles[i].height - 10 && bike.y + bike.height - 10 > obstacles[i].y + 10) { triggerGameOver(); }
+                if(obstacles[i].x < -100) obstacles.splice(i, 1);
+            }
+            draw();
+            gameLoop = requestAnimationFrame(update);
+        }
+
+        let roadOffset = 0;
+
+        function draw() {
+            if(currentWeather === 'sunny') { ctx.fillStyle = '#64b5f6'; }
+            else if(currentWeather === 'rainy') { ctx.fillStyle = '#455a64'; }
+            else if(currentWeather === 'night') { ctx.fillStyle = '#0a0a1a'; }
+            else if(currentWeather === 'stormy') { ctx.fillStyle = '#1a1a2e'; }
+            else if(currentWeather === 'foggy') { ctx.fillStyle = '#90a4ae'; }
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#333'; ctx.fillRect(0, canvas.height/2 - 120, canvas.width, 240); 
+
+            roadOffset = (roadOffset + gameSpeed) % 80;
+            ctx.fillStyle = '#fff';
+            for(let i = -80; i < canvas.width; i += 80) {
+                ctx.fillRect(i + roadOffset, canvas.height/2 - 80, 40, 6);
+                ctx.fillRect(i + roadOffset, canvas.height/2 + 80, 40, 6);
+                ctx.fillRect(i + roadOffset, canvas.height/2 - 3, 40, 6);
+            }
+
+            ctx.fillStyle = '#00e5ff'; ctx.fillRect(0, canvas.height/2 - 125, canvas.width, 5); ctx.fillRect(0, canvas.height/2 + 120, canvas.width, 5);
+
+            ctx.font = `55px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            for(let obs of obstacles) { ctx.fillText(obs.emoji, obs.x + obs.width/2, obs.y + obs.height/2); }
+
+            ctx.font = `65px Arial`;
+            ctx.fillText(selectedCarEmoji, bike.x + bike.width/2, bike.y + bike.height/2);
+
+            if(currentWeather === 'rainy' || currentWeather === 'stormy') {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.lineWidth = 2;
+                for(let drop of rainDrops) { ctx.beginPath(); ctx.moveTo(drop.x, drop.y); ctx.lineTo(drop.x + 5, drop.y + 15); ctx.stroke(); }
+            }
+            if(currentWeather === 'foggy') { ctx.fillStyle = 'rgba(200, 200, 200, 0.5)'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+            if(currentWeather === 'night') { ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+            if(currentWeather === 'stormy' && Math.random() < 0.02) { ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+        }
+
+        function triggerGameOver() {
+            isGameOver = true;
+            document.getElementById('crash-sound').play().catch(e=>console.log(e));
+            document.getElementById('bg-music').pause();
+            let earned = Math.floor(score / 100); 
+            coins += earned; saveData();
+            document.getElementById('final-score-value').innerText = Math.floor(score/10);
+            document.getElementById('earned-coins-display').innerText = `+${earned} 🪙`;
+            showScreen('gameover-screen');
+        }
+
+        function playAgain() { startGame(); }
+        window.onload = () => { resizeCanvas(); loadGarage(); };
+    </script>
+</body>
+</html>
